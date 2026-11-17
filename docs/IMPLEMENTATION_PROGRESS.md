@@ -68,12 +68,31 @@ Pinned in `pyproject.toml`; installed into `.venv` (Python 3.13.14).
 - SQLAlchemy imports on host after disabling its blocked compiled accelerators
   (pure-Python twins); `agno.db.postgres` (durable queue) imports OK.
 
+## Baseline migration live (2026-11-17, session 2 continued)
+
+- `0001_baseline` executed as `csip_migrate` against the `csip` schema
+  (Alembic bookkeeping kept in `csip.csip_alembic_version`).
+- Five tables: `sources`, `runs`, `job_events`, `artifacts`,
+  `raw_observations`, with idempotency unique indexes and **database-level
+  append-only triggers** on `job_events` / `raw_observations`.
+- Verified live via `scripts/db/verify_baseline.py`: table ownership, ingest
+  DML, UPDATE/DELETE rejection, read-role write denial — all passed.
+- Postgres repositories added (`PostgresSourceRegistry`,
+  `PostgresRunRepository`) implementing the application ports, with
+  `SourceProfile` row mapping in `infrastructure/database/mappers.py`.
+- 8 live-DB integration tests added (`tests/integration/test_postgres_baseline.py`):
+  schema baseline, registry roundtrip, run lifecycle + idempotency uniqueness,
+  and end-to-end `SubmitCollectionJob` approval/denial/replay over Postgres.
+  Suite skips cleanly when the DB is unreachable.
+- Test totals: **93 passed** (85 in-memory + 8 live-DB); ruff + mypy clean.
+- Session report: `docs/reports/session-2-report.md`.
+
 ## Next actions
 
 1. Resolve the crawl4ai import blocker (policy exclusion or containerized
    extraction) — decision needed from the user.
-2. Phase 1: Alembic baseline migration (source registry, runs, job events,
-   raw observations) executed as `csip_migrate` against the `csip` schema.
-3. Phase 1: Agno Workflow + AgentOS wiring (`QueueConfig(durable=True,
+2. Phase 1: Agno Workflow + AgentOS wiring (`QueueConfig(durable=True,
    max_attempts=1)`) with the fixture adapter; `/jobs` submit/status endpoints.
+3. Phase 1: fixture end-to-end slice (submit → approved plan → fixture
+   artifacts + raw observations persisted with fingerprints).
 

@@ -34,13 +34,19 @@ def _redact(url: str) -> str:
     return re.sub(r"(://[^:/@]+:)[^@]+@", r"\1***@", url)
 
 
+def _version_table_kwargs() -> dict:
+    # Keep Alembic's bookkeeping inside the application-owned schema so the
+    # csip_migrate role (which only has CREATE on `csip`) can manage it.
+    return {"version_table": "csip_alembic_version", "version_table_schema": "csip"}
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=_database_url(),
-        target_metadata=None,  # Phase 1: application-owned metadata
+        target_metadata=None,  # application-owned metadata lives in migrations
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        version_table="csip_alembic_version",
+        **_version_table_kwargs(),
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -51,8 +57,8 @@ def run_migrations_online() -> None:
     with engine.connect() as connection:
         context.configure(
             connection=connection,
-            target_metadata=None,  # Phase 1: application-owned metadata
-            version_table="csip_alembic_version",
+            target_metadata=None,  # application-owned metadata lives in migrations
+            **_version_table_kwargs(),
         )
         with context.begin_transaction():
             context.run_migrations()

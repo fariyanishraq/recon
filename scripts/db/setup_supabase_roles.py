@@ -135,6 +135,8 @@ def main() -> int:
     conn.run(f'ALTER DEFAULT PRIVILEGES FOR ROLE "csip_migrate" IN SCHEMA "{SCHEMA_APP}" GRANT '
              f'SELECT, INSERT, UPDATE, DELETE ON TABLES TO "csip_ingest"')
     conn.run(f'ALTER DEFAULT PRIVILEGES FOR ROLE "csip_migrate" IN SCHEMA "{SCHEMA_APP}" GRANT '
+             f'USAGE, SELECT ON SEQUENCES TO "csip_ingest"')
+    conn.run(f'ALTER DEFAULT PRIVILEGES FOR ROLE "csip_migrate" IN SCHEMA "{SCHEMA_APP}" GRANT '
              f'SELECT ON TABLES TO "csip_read"')
     # Supavisor needs the roles usable through pooled connections
     for role in ROLES:
