@@ -1,0 +1,66 @@
+[project]
+name = "csip"
+version = "0.1.0"
+description = "China Sourcing Intelligence Pipeline - policy-first, evidence-first sourcing data ingestion platform."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "AESS" }]
+
+# Versions verified against PyPI on 2026-11-17 (see docs/adr/ADR-001-tech-stack.md).
+dependencies = [
+    "agno[os,postgres,ollama,psycopg]==3.2.0",
+    "crawl4ai==0.9.5",
+    "browser-use==1.0.6",
+    "fastapi==0.163.1",
+    "uvicorn==0.54.0",
+    "pydantic>=2.14,<3",
+    "pydantic-settings>=2,<3",
+    "sqlalchemy==2.1.9",
+    "alembic==1.20.1",
+    "python-multipart>=0.0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7",
+    "httpx>=0.28",
+    "ruff==0.15.20",
+    "mypy>=2.4",
+    "types-PyYAML",
+]
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# SIM108: keep explicit if/else for policy branches (readability over ternary).
+ignore = ["SIM108"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:websockets.*",
+]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+packages = ["csip"]
+warn_unused_ignores = false
+check_untyped_defs = true

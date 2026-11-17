@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets - never commit credentials or session material
+.env
+.env.*
+!.env.example
+
+# Local runtime artifacts
+artifacts/local-only/*
+!artifacts/local-only/.gitkeep
+*.db
+*.sqlite3
+
+# Playwright / browsers
+playwright-report/
+test-results/
