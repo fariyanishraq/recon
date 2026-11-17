@@ -17,11 +17,15 @@ config = context.config
 
 
 def _database_url() -> str:
-    url = os.environ.get("CSIP_DATABASE_URL", "")
+    # Migrations run under the dedicated least-privilege DDL role
+    # (csip_migrate). The app-writer URL is only a fallback for dev.
+    url = os.environ.get("CSIP_DB_MIGRATE_URL", "") or os.environ.get(
+        "CSIP_DATABASE_URL", ""
+    )
     if not url:
         raise RuntimeError(
-            "CSIP_DATABASE_URL is not set; refusing to run migrations "
-            "(fail-closed migration discipline)"
+            "CSIP_DB_MIGRATE_URL (or CSIP_DATABASE_URL) is not set; refusing "
+            "to run migrations (fail-closed migration discipline)"
         )
     return url
 

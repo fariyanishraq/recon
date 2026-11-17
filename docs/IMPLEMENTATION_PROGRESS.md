@@ -45,15 +45,35 @@ Pinned in `pyproject.toml`; installed into `.venv` (Python 3.13.14).
 
 ## Blockers
 
-- None for Phase 0. PostgreSQL/Supabase instance (Docker) not yet provisioned —
-  required for Phase 1 migrations and durable queue. Docker 29.8.2 is available.
+- **crawl4ai cannot import on the host** — Windows Application Control policy
+  blocks its compiled dependencies (`xxhash`, `numpy`). Options: add a policy
+  exclusion for `.venv` (recommended) or run extraction in a Linux container.
+  Documented in `docs/runbooks/local-development.md`.
+- Supabase stack is running with **default placeholder secrets** (demo JWT keys,
+  default POSTGRES_PASSWORD/DASHBOARD_PASSWORD) — must be rotated with
+  `utils/generate-keys.sh` + `utils/add-new-auth-keys.sh` before any network
+  exposure. Local-only until then.
+
+## Environment provisioned (2026-11-17, session 2)
+
+- Self-hosted Supabase stack (user-provided, Docker) — Postgres 17.6.1 behind
+  Supavisor pooler (session mode :5432, transaction :6543, tenant
+  `your-tenant-id`, usernames must be `<role>.<tenant_id>` through the pooler).
+- Schemas `csip` (application) and `agno` (AgentOS runtime) created.
+- Least-privilege roles `csip_migrate`, `csip_ingest`, `csip_read`, `csip_agno`
+  created with random passwords (stored only in gitignored `.env` via
+  `scripts/db/setup_supabase_roles.py` — idempotent, `--reset` rotates).
+- All four role connections verified through the pooler; `Settings` validates.
+- `db/env.py` now prefers `CSIP_DB_MIGRATE_URL` (DDL role) for migrations.
+- SQLAlchemy imports on host after disabling its blocked compiled accelerators
+  (pure-Python twins); `agno.db.postgres` (durable queue) imports OK.
 
 ## Next actions
 
-1. Finish Phase 0 exit check: run full suite + lint + app boot in safe local mode.
-2. Phase 1: provision self-hosted PostgreSQL (Docker), Alembic baseline migration
-   for source registry / runs / job events / raw observations.
-3. Phase 1: Agno Workflow (agno 3.2.0) wiring of the approved-plan run through the
-   fixture adapter with durable queue (`QueueConfig(durable=True, max_attempts=1)`),
-   plus `/jobs` submit/status endpoints with idempotency keys.
-4. Phase 1: Crawl4AI extraction profile for one fixture page family (product_detail).
+1. Resolve the crawl4ai import blocker (policy exclusion or containerized
+   extraction) — decision needed from the user.
+2. Phase 1: Alembic baseline migration (source registry, runs, job events,
+   raw observations) executed as `csip_migrate` against the `csip` schema.
+3. Phase 1: Agno Workflow + AgentOS wiring (`QueueConfig(durable=True,
+   max_attempts=1)`) with the fixture adapter; `/jobs` submit/status endpoints.
+
