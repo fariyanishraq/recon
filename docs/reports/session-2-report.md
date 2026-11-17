@@ -159,12 +159,77 @@ the database is unreachable, keeping the suite green on any machine.
    exposure; rerun `setup_supabase_roles.py --reset` afterwards to refresh
    role passwords.
 
-## 7. Next steps
+## 7. Addendum — both open decisions executed (same session)
+
+### 7.1 Decision 1: crawl4ai unblocked via containerized extraction
+
+The App Control exclusion (option a) requires a manual admin policy change on
+Windows and cannot be applied programmatically, so the working path was
+implemented: **crawl4ai runs in Linux Docker** (`containers/extraction/`):
+
+- `extractor.py` — FastAPI service on **loopback-only** `127.0.0.1:8100`
+  (goals G8): `GET /healthz`, `POST /extract_raw` (extract from
+  **already-captured** artifact HTML, no network — the pipeline-preferred
+  path), `POST /extract` (fetch + extract; caller must pass
+  policy-authorized URLs only — the service performs no policy checks
+  itself).
+- HTTP + LXML strategies only (no Playwright/Chromium in the image);
+  browser-dependent strategies wait until policy explicitly approves
+  `browser_pages`.
+- Deterministic structured JSON output; the LLM never performs extraction
+  (blueprint invariant).
+- Smoke test: `docker run --rm csip-extraction:latest python extractor.py --selftest`.
+
+### 7.2 Decision 2: Supabase secret rotation — applied and verified
+
+The stack had been running with the public demo placeholder secrets. Applied
+the official scripts inside a throwaway `node:22-bookworm` container
+(secrets suppressed from all output):
+
+1. `utils/generate-keys.sh --update-env` — JWT_SECRET, ANON_KEY,
+   SERVICE_ROLE_KEY, SECRET_KEY_BASE, REALTIME_DB_ENC_KEY, VAULT_ENC_KEY,
+   PG_META_CRYPTO_KEY, LOGFLARE tokens, S3 keys, MINIO password,
+   **POSTGRES_PASSWORD**, DASHBOARD_PASSWORD.
+2. `utils/add-new-auth-keys.sh --update-env` — EC P-256 keypair
+   (JWT_KEYS/JWKS), opaque API keys (`sb_publishable_`/`sb_secret_`),
+   ES256 asymmetric API keys; uncommented the asymmetric-key env lines in
+   docker-compose.yml.
+
+Then, in dependency order:
+
+1. `ALTER ROLE ... PASSWORD '<new>'` for **every non-`csip_*` login role**
+   (all Supabase service roles share `POSTGRES_PASSWORD` at init; hex
+   password inline-safe; done before service restart so services
+   reconnecting with the new env var succeed).
+2. Deleted Supavisor tenant rows (`_supavisor.tenants` / `users` in the
+   `_supabase` database) — `volumes/pooler/pooler.exs` creates the tenant
+   **only once**, baking in the then-current `POSTGRES_PASSWORD`; deleting
+   forces re-provisioning with the new one on startup.
+3. `docker compose up -d` — all services recreated with the new environment.
+
+Verification (`scripts/db/verify_rotation.py` — prints no secrets):
+
+| Check | Result |
+|---|---|
+| New admin password connects via pooler | ✅ |
+| Supavisor tenant re-provisioned (`your-tenant-id`) | ✅ |
+| `csip_migrate/ingest/read/agno` still connect (passwords were independent/random) | ✅ |
+| Auth health with **new opaque publishable key** | ✅ HTTP 200 |
+| REST with **new SERVICE_ROLE_KEY** | ✅ HTTP 200 |
+| REST with anon key on a data route | ✅ (404 table-not-found = passed gateway + PostgREST; OpenAPI introspection is RBAC-blocked by design) |
+| Studio login with **new DASHBOARD_PASSWORD** (`/project/default`) | ✅ HTTP 200 |
+| All 11 containers healthy | ✅ |
+
+Backups kept in the supabase directory (never committed):
+`.env.backup-20261117`, `docker-compose.yml.backup-20261117`, plus the
+scripts' own `.old` copies.
+
+### 7.3 Updated next steps
 
 1. Agno Workflow + AgentOS wiring: durable queue (`QueueConfig(durable=True,
    max_attempts=1)`) against the `agno` schema via `CSIP_AGNO_DB_URL`.
-2. `/jobs` submit + status endpoints with idempotency keys (API layer over the
-   use case; safe error mapping).
-3. Fixture end-to-end slice: submitted job → approved plan → fixture adapter →
-   artifacts + raw observations persisted with fingerprints.
-4. Crawl4AI extraction profile (blocked — see §6.1).
+2. `/jobs` submit + status endpoints with idempotency keys.
+3. Fixture end-to-end slice — now **including** the extraction container:
+   approved plan → fixture capture → `/extract_raw` → raw observations
+   persisted with fingerprints.
+

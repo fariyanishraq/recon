@@ -45,14 +45,15 @@ Pinned in `pyproject.toml`; installed into `.venv` (Python 3.13.14).
 
 ## Blockers
 
-- **crawl4ai cannot import on the host** — Windows Application Control policy
-  blocks its compiled dependencies (`xxhash`, `numpy`). Options: add a policy
-  exclusion for `.venv` (recommended) or run extraction in a Linux container.
-  Documented in `docs/runbooks/local-development.md`.
-- Supabase stack is running with **default placeholder secrets** (demo JWT keys,
-  default POSTGRES_PASSWORD/DASHBOARD_PASSWORD) — must be rotated with
-  `utils/generate-keys.sh` + `utils/add-new-auth-keys.sh` before any network
-  exposure. Local-only until then.
+- ~~crawl4ai cannot import on the host~~ — **resolved 2026-11-17** by
+  containerizing the extraction stage (`containers/extraction/`, Linux
+  Docker, loopback-only). A Windows App Control exclusion for `.venv` remains
+  an optional host-native alternative (manual admin action).
+- ~~Supabase stack running with default placeholder secrets~~ — **resolved
+  2026-11-17** by full secret rotation (JWT keys, POSTGRES_PASSWORD,
+  dashboard password, vault/encryption keys, opaque API keys) with
+  Supavisor tenant re-provisioning; verified by
+  `scripts/db/verify_rotation.py`.
 
 ## Environment provisioned (2026-11-17, session 2)
 
@@ -89,10 +90,9 @@ Pinned in `pyproject.toml`; installed into `.venv` (Python 3.13.14).
 
 ## Next actions
 
-1. Resolve the crawl4ai import blocker (policy exclusion or containerized
-   extraction) — decision needed from the user.
-2. Phase 1: Agno Workflow + AgentOS wiring (`QueueConfig(durable=True,
+1. Agno Workflow + AgentOS wiring (`QueueConfig(durable=True,
    max_attempts=1)`) with the fixture adapter; `/jobs` submit/status endpoints.
-3. Phase 1: fixture end-to-end slice (submit → approved plan → fixture
-   artifacts + raw observations persisted with fingerprints).
+2. Fixture end-to-end slice: submit → approved plan → fixture capture →
+   `/extract_raw` on the extraction container → artifacts + raw observations
+   persisted with fingerprints.
 

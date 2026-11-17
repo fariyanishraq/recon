@@ -1,0 +1,12 @@
+# CSIP extraction service (crawl4ai in Linux Docker).
+#
+# Bind is loopback-only on the host (goals G8): the extraction endpoint is an
+# internal pipeline service, never publicly reachable.
+services:
+  extraction:
+    build: .
+    image: csip-extraction:latest
+    container_name: csip-extraction
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8100:8100"

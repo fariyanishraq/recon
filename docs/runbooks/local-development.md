@@ -59,13 +59,11 @@ This machine blocks several **compiled** Python extensions
 | agno / agno.db.postgres / alembic | OK after the above |
 | browser-use | OK |
 | psycopg binary DLL | blocked → project uses **pg8000** (pure Python) as SQLAlchemy driver (`postgresql+pg8000://` URLs) |
-| **crawl4ai** | **blocked** (needs compiled `xxhash` + `numpy`; no pure fallback) |
+| **crawl4ai** | **blocked on host** (needs compiled `xxhash` + `numpy`; no pure fallback) → **resolution (2026-11-17)**: extraction runs in a Linux Docker container (`containers/extraction/`); see below. A Windows App Control exclusion for `.venv` would also work but requires a manual admin policy change. |
 
-Consequence: the Crawl4AI extraction stage cannot run on the host until one of:
-
-1. an App Control exclusion is added for this project's `.venv`
-   (recommended — proper fix), or
-2. extraction workloads run inside a Linux Docker container (no Windows DLL policy).
+Consequence: the Crawl4AI extraction stage runs as the **`csip-extraction`**
+container (Linux Docker), bound to `127.0.0.1:8100` only. See
+`containers/extraction/README.md`. Host-side code talks to it over HTTP.
 
 If the venv is recreated, re-apply the `.pyd` rename via:
 
@@ -73,6 +71,40 @@ If the venv is recreated, re-apply the `.pyd` rename via:
 Get-ChildItem -Recurse -Filter "*.pyd" ".venv\Lib\site-packages\sqlalchemy" |
   Rename-Item -NewName { $_.Name + ".disabled" }
 ```
+
+## Extraction container (crawl4ai on this machine)
+
+```powershell
+docker compose -f containers\extraction\docker-compose.yml up -d --build
+```
+
+- `GET http://127.0.0.1:8100/healthz` — liveness
+- `POST /extract_raw` — extract from already-captured artifact HTML (no
+  network; the pipeline-preferred path)
+- `POST /extract` — fetch + extract a URL; the caller must only pass
+  policy-authorized URLs
+
+## Supabase secret rotation (2026-11-17)
+
+The self-hosted stack previously ran with the public demo placeholder
+secrets. Rotation applied via the official scripts
+(`utils/generate-keys.sh --update-env`, `utils/add-new-auth-keys.sh
+--update-env`) inside a `node:22-bookworm` container, plus:
+
+1. `ALTER ROLE ... PASSWORD` for every non-`csip_*` login role (service roles
+   all share `POSTGRES_PASSWORD` in the supabase image).
+2. Deletion of the Supavisor tenant rows in `_supabase._supavisor`
+   (`tenants`/`users`) so `volumes/pooler/pooler.exs` re-provisions the
+   tenant with the new password on startup (the tenant is created only once,
+   with the then-current password).
+3. `docker compose up -d` recreation of all services.
+
+Pre-change backups: `.env.backup-20261117`,
+`docker-compose.yml.backup-20261117`. Post-rotation verification:
+`scripts/db/verify_rotation.py` (admin via pooler, tenant re-provisioned,
+csip roles unchanged, new keys accepted by the gateway; never prints
+secrets). The `csip_*` role passwords in the recon `.env` were random and
+unchanged by this.
 
 ## Safety rules while developing
 
